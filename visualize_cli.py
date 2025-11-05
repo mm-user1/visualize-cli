@@ -388,7 +388,7 @@ class TradeVisualizer:
                     # Проверка выхода
                     if price <= position['stop_price']:
                         position['exit_time'] = timestamp
-                        position['exit_price'] = position['stop_price']
+                        position['exit_price'] = price  # Реальная цена закрытия свечи
                         position['exit_index'] = i
                         position['exit_reason'] = 'stop'
                         trades.append(position)
@@ -404,7 +404,7 @@ class TradeVisualizer:
                     # Проверка выхода
                     if price >= position['stop_price']:
                         position['exit_time'] = timestamp
-                        position['exit_price'] = position['stop_price']
+                        position['exit_price'] = price  # Реальная цена закрытия свечи
                         position['exit_index'] = i
                         position['exit_reason'] = 'stop'
                         trades.append(position)
