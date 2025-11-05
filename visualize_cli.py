@@ -105,10 +105,18 @@ class TradeVisualizer:
                 break
         
         if timestamp_col:
-            df['timestamp'] = pd.to_datetime(df[timestamp_col])
+            # Проверяем, является ли колонка числовой (Unix timestamp)
+            if pd.api.types.is_numeric_dtype(df[timestamp_col]):
+                # Пробуем парсить как Unix timestamp в секундах
+                df['timestamp'] = pd.to_datetime(df[timestamp_col], unit='s')
+            else:
+                df['timestamp'] = pd.to_datetime(df[timestamp_col])
         else:
             # Предполагаем, что первая колонка - timestamp
-            df['timestamp'] = pd.to_datetime(df.iloc[:, 0])
+            if pd.api.types.is_numeric_dtype(df.iloc[:, 0]):
+                df['timestamp'] = pd.to_datetime(df.iloc[:, 0], unit='s')
+            else:
+                df['timestamp'] = pd.to_datetime(df.iloc[:, 0])
         
         # Нормализуем названия колонок
         df.columns = [c.lower().strip() for c in df.columns]
@@ -205,11 +213,15 @@ class TradeVisualizer:
     def _run_simple_backtest(self, params, date_range):
         """Упрощенная симуляция трейдов"""
         data = self.market_data.copy()
-        
+
         # Применяем фильтр по датам
         if date_range:
             start, end = date_range
             data = data[start:end]
+            if len(data) == 0:
+                print(f"  ⚠ Warning: No data in date range {start} to {end}")
+                print(f"    Available data range: {self.market_data.index.min()} to {self.market_data.index.max()}")
+                return [], data
         
         # Извлекаем параметры
         ma_type = params.get('MA Type', 'EMA')
@@ -407,7 +419,11 @@ class TradeVisualizer:
         
         # Запуск бэктеста
         trades, data = self._run_backtest(params, date_range)
-        
+
+        # Проверка на пустые данные
+        if len(data) == 0:
+            raise ValueError("No market data available for the specified date range")
+
         # Создание графика
         fig = plt.figure(figsize=(20, 12))
         gs = fig.add_gridspec(3, 4, height_ratios=[3, 1, 0.1], width_ratios=[3, 3, 3, 1], 
@@ -495,17 +511,22 @@ class TradeVisualizer:
         plt.setp(ax_price.xaxis.get_majorticklabels(), rotation=45, ha='right')
         
         # Equity curve
-        equity = [100]
-        trade_times = [data.index[0]]
-        
-        for trade in trades:
-            if trade['type'] == 'long':
-                pnl_pct = (trade['exit_price'] - trade['entry_price']) / trade['entry_price'] * 100
-            else:
-                pnl_pct = (trade['entry_price'] - trade['exit_price']) / trade['entry_price'] * 100
-            
-            equity.append(equity[-1] * (1 + pnl_pct / 100))
-            trade_times.append(trade['exit_time'])
+        if len(trades) > 0:
+            equity = [100]
+            trade_times = [data.index[0]]
+
+            for trade in trades:
+                if trade['type'] == 'long':
+                    pnl_pct = (trade['exit_price'] - trade['entry_price']) / trade['entry_price'] * 100
+                else:
+                    pnl_pct = (trade['entry_price'] - trade['exit_price']) / trade['entry_price'] * 100
+
+                equity.append(equity[-1] * (1 + pnl_pct / 100))
+                trade_times.append(trade['exit_time'])
+        else:
+            # Нет трейдов - плоская линия
+            equity = [100, 100]
+            trade_times = [data.index[0], data.index[-1]]
         
         ax_equity.plot(trade_times, equity, linewidth=2.5, color='darkgreen', zorder=2)
         ax_equity.fill_between(trade_times, 100, equity, alpha=0.3, 
