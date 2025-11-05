@@ -198,17 +198,99 @@ class TradeVisualizer:
         Запускает бэктест с использованием движка проекта
         Если движок недоступен, использует упрощенную симуляцию
         """
-        if self.backtest_engine and hasattr(self.backtest_engine, 'run_backtest'):
+        if self.backtest_engine and hasattr(self.backtest_engine, 'run_strategy'):
             return self._run_project_backtest(params, date_range)
         else:
             return self._run_simple_backtest(params, date_range)
     
     def _run_project_backtest(self, params, date_range):
         """Запуск бэктеста через движок проекта"""
-        # TODO: Интеграция с реальным движком проекта
-        # Здесь нужно будет адаптировать под конкретную реализацию
         print("Using project backtest engine")
-        return self._run_simple_backtest(params, date_range)
+
+        # Подготовка данных
+        data = self.market_data.copy()
+
+        # Нормализация названий колонок для backtest_engine
+        data_normalized = pd.DataFrame()
+        data_normalized['Close'] = data['close']
+        data_normalized['High'] = data['high']
+        data_normalized['Low'] = data['low']
+        data_normalized['Open'] = data['open']
+        data_normalized['Volume'] = data.get('volume', pd.Series(0, index=data.index))
+        data_normalized.index = data.index
+
+        # Создание объекта StrategyParams
+        fixed = self.optimization_results['fixed_params']
+
+        strategy_params = self.backtest_engine.StrategyParams(
+            use_backtester=True,
+            use_date_filter=date_range is not None,
+            start=date_range[0] if date_range else None,
+            end=date_range[1] if date_range else None,
+            ma_type=params.get('MA Type', 'EMA'),
+            ma_length=int(float(params.get('MA Length', 50))),
+            close_count_long=int(float(params.get('Close Count Long', 3))),
+            close_count_short=int(float(params.get('Close Count Short', 3))),
+            stop_long_atr=float(params.get('Stop Long X', 1.0)),
+            stop_long_rr=float(fixed.get('stopLongRR', 3)),
+            stop_long_lp=int(float(params.get('Stop Long LP', 2))),
+            stop_short_atr=float(params.get('Stop Short X', 1.0)),
+            stop_short_rr=float(fixed.get('stopShortRR', 3)),
+            stop_short_lp=int(float(params.get('Stop Short LP', 2))),
+            stop_long_max_pct=float(params.get('Stop Long Max %', 0)),
+            stop_short_max_pct=float(params.get('Stop Short Max %', 0)),
+            stop_long_max_days=int(float(params.get('Stop Long Max Days', 0))),
+            stop_short_max_days=int(float(params.get('Stop Short Max Days', 0))),
+            trail_rr_long=float(fixed.get('trailRRLong', 1)),
+            trail_rr_short=float(fixed.get('trailRRShort', 1)),
+            trail_ma_long_type=params.get('Tr L Type', 'T3'),
+            trail_ma_long_length=int(float(params.get('Tr L Len', 100))),
+            trail_ma_long_offset=float(params.get('Tr L Off', 0.0)),
+            trail_ma_short_type=params.get('Tr S Type', 'T3'),
+            trail_ma_short_length=int(float(params.get('Tr S Len', 100))),
+            trail_ma_short_offset=float(params.get('Tr S Off', 0.0)),
+            risk_per_trade_pct=1.0,
+            contract_size=1.0,
+            commission_rate=0.0005,
+        )
+
+        # Запуск стратегии
+        result = self.backtest_engine.run_strategy(data_normalized, strategy_params)
+
+        # Преобразование результатов в формат для визуализации
+        trades = []
+        for trade_record in result.trades:
+            # Получаем trail history для визуализации
+            trade_direction = trade_record.direction
+            trades.append({
+                'type': trade_direction,
+                'entry_time': trade_record.entry_time,
+                'entry_price': trade_record.entry_price,
+                'exit_time': trade_record.exit_time,
+                'exit_price': trade_record.exit_price,
+                'initial_stop': trade_record.entry_price,  # Упрощение
+                'trail_history': []  # Будет пустым, так как engine не возвращает историю
+            })
+
+        # Пересчет индикаторов для графика (используем данные с фильтром по датам если нужно)
+        if date_range:
+            start, end = date_range
+            data = data[start:end]
+            if len(data) == 0:
+                print(f"  ⚠ Warning: No data in date range {start} to {end}")
+                return [], data
+
+        # Расчет MA и trail для визуализации
+        data['ma'] = self._calculate_ma(data, params.get('MA Type', 'EMA'),
+                                        int(float(params.get('MA Length', 50))))
+        data['trail_long'] = self._calculate_ma(data, params.get('Tr L Type', 'T3'),
+                                                int(float(params.get('Tr L Len', 100)))) * \
+                            (1 + float(params.get('Tr L Off', 0.0)) / 100)
+        data['trail_short'] = self._calculate_ma(data, params.get('Tr S Type', 'T3'),
+                                                 int(float(params.get('Tr S Len', 100)))) * \
+                             (1 + float(params.get('Tr S Off', 0.0)) / 100)
+
+        return trades, data
     
     def _run_simple_backtest(self, params, date_range):
         """Упрощенная симуляция трейдов"""
@@ -381,27 +463,29 @@ class TradeVisualizer:
     def _format_params_text(self, params, fixed_params):
         """Форматирование параметров для отображения на графике"""
         lines = []
-        
+
         # Fixed parameters
         lines.append("Fixed Parameters:")
         for key, value in fixed_params.items():
             lines.append(f"  {key}: {value}")
-        
+
         lines.append("\nCombination:")
         # Ключевые параметры комбинации
         key_params = [
-            'MA Type', 'MA Length', 
+            'MA Type', 'MA Length',
             'Close Count Long', 'Close Count Short',
             'Stop Long X', 'Stop Long LP',
             'Stop Short X', 'Stop Short LP',
+            'Stop Long Max %', 'Stop Short Max %',
+            'Stop Long Max Days', 'Stop Short Max Days',
             'Tr L Type', 'Tr L Len', 'Tr L Off',
             'Tr S Type', 'Tr S Len', 'Tr S Off'
         ]
-        
+
         for param in key_params:
             if param in params:
                 lines.append(f"  {param}: {params[param]}")
-        
+
         return '\n'.join(lines)
     
     def visualize_combination(self, combo_index, date_range=None, output_dir='./charts'):
@@ -419,6 +503,10 @@ class TradeVisualizer:
         
         # Запуск бэктеста
         trades, data = self._run_backtest(params, date_range)
+
+        # Вывод информации о сделках
+        expected_trades = int(params.get('Trades', 0))
+        print(f"  Generated {len(trades)} trades (CSV shows: {expected_trades})")
 
         # Проверка на пустые данные
         if len(data) == 0:
