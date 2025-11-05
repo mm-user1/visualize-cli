@@ -222,7 +222,7 @@ For batch processing, the tool can handle 50+ charts efficiently. The bottleneck
 ## No Testing Framework
 
 Currently, there is no formal test suite. Testing is done manually using the included example CSV files:
-- `OKX_LINKUSDT.P, 15 2025.02.01-2025.09.09.csv` (1MB market data)
+- `OKX_LINKUSDT.P, 15 2022.01.01-2025.10.27.csv` (6MB market data)
 - `OKX_LINKUSDT.P, 15 2025.05.01-2025.10.25_EMA+SMA+...csv` (26KB optimization results)
 
 When making changes, verify functionality by running the CLI tool with these files.
