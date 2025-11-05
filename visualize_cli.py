@@ -563,8 +563,8 @@ class TradeVisualizer:
         ax_equity = fig.add_subplot(gs[1, :3])
         ax_params = fig.add_subplot(gs[:2, 3])
         
-        # График цены - японские свечи
-        self._plot_candlesticks(ax_price, data)
+        # График цены - японские свечи (TradingView style colors)
+        self._plot_candlesticks(ax_price, data, colorup='#d1d4dc', colordown='#787b86')
 
         # Скользящая средняя (фиолетовый ненасыщенный цвет)
         ax_price.plot(data.index, data['ma'],
