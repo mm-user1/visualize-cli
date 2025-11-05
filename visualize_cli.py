@@ -587,15 +587,11 @@ class TradeVisualizer:
         # Трейды
         for trade in trades:
             if trade['type'] == 'long':
-                # Entry
+                # Entry - только треугольник вверх (уменьшенный на 30%)
                 ax_price.scatter(trade['entry_time'], trade['entry_price'],
-                               color='green', marker='^', s=150, zorder=5,
+                               color='green', marker='^', s=105, zorder=5,
                                edgecolors='darkgreen', linewidths=1.5)
-                # Exit
-                ax_price.scatter(trade['exit_time'], trade['exit_price'],
-                               color='red', marker='v', s=150, zorder=5,
-                               edgecolors='darkred', linewidths=1.5)
-                # Exit marker (orange cross)
+                # Exit - только оранжевый крестик
                 ax_price.scatter(trade['exit_time'], trade['exit_price'],
                                color='orange', marker='x', s=80, zorder=6, linewidths=2)
                 # Initial stop
@@ -608,15 +604,11 @@ class TradeVisualizer:
                     ax_price.plot(trail_times, trail_prices, color='orange',
                                 linewidth=2, alpha=0.8, zorder=4)
             else:  # short
-                # Entry
+                # Entry - только треугольник вниз (уменьшенный на 30%)
                 ax_price.scatter(trade['entry_time'], trade['entry_price'],
-                               color='red', marker='v', s=150, zorder=5,
+                               color='red', marker='v', s=105, zorder=5,
                                edgecolors='darkred', linewidths=1.5)
-                # Exit
-                ax_price.scatter(trade['exit_time'], trade['exit_price'],
-                               color='green', marker='^', s=150, zorder=5,
-                               edgecolors='darkgreen', linewidths=1.5)
-                # Exit marker (orange cross)
+                # Exit - только оранжевый крестик
                 ax_price.scatter(trade['exit_time'], trade['exit_price'],
                                color='orange', marker='x', s=80, zorder=6, linewidths=2)
                 # Initial stop
