@@ -462,19 +462,26 @@ class TradeVisualizer:
         else:
             return data['close'].rolling(window=length).mean()
     
-    def _plot_candlesticks(self, ax, data, width=0.6, colorup='#26a69a', colordown='#ef5350'):
+    def _plot_candlesticks(self, ax, data, width=None, colorup='#26a69a', colordown='#ef5350'):
         """
         Рисует японские свечи на графике
 
         Args:
             ax: matplotlib axis
             data: DataFrame с колонками open, high, low, close и DatetimeIndex
-            width: ширина свечи в днях
+            width: ширина свечи в днях (если None, вычисляется автоматически)
             colorup: цвет растущей свечи (зеленый)
             colordown: цвет падающей свечи (красный)
         """
         # Конвертируем datetime в числовой формат для matplotlib
         dates = mdates.date2num(data.index)
+
+        # Автоматически вычисляем ширину свечи на основе временного интервала
+        if width is None and len(dates) > 1:
+            # Берем среднее расстояние между свечами
+            time_interval = np.median(np.diff(dates))
+            # Ширина свечи = 40% от интервала (чтобы оставить пространство между свечами)
+            width = time_interval * 0.4
 
         for i, (idx, row) in enumerate(data.iterrows()):
             date = dates[i]
@@ -486,9 +493,9 @@ class TradeVisualizer:
             # Определяем цвет свечи
             color = colorup if close_price >= open_price else colordown
 
-            # Рисуем фитиль (high-low линия)
+            # Рисуем фитиль (high-low линия) - более тонкий, как в TradingView
             ax.plot([date, date], [low_price, high_price],
-                   color=color, linewidth=1, solid_capstyle='round', zorder=1)
+                   color=color, linewidth=0.8, solid_capstyle='butt', zorder=1)
 
             # Рисуем тело свечи
             height = abs(close_price - open_price)
