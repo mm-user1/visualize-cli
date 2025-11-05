@@ -14,6 +14,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.patches import Rectangle
+from matplotlib.lines import Line2D
 from pathlib import Path
 from datetime import datetime
 import glob
@@ -460,6 +462,46 @@ class TradeVisualizer:
         else:
             return data['close'].rolling(window=length).mean()
     
+    def _plot_candlesticks(self, ax, data, width=0.6, colorup='#26a69a', colordown='#ef5350'):
+        """
+        Рисует японские свечи на графике
+
+        Args:
+            ax: matplotlib axis
+            data: DataFrame с колонками open, high, low, close и DatetimeIndex
+            width: ширина свечи в днях
+            colorup: цвет растущей свечи (зеленый)
+            colordown: цвет падающей свечи (красный)
+        """
+        # Конвертируем datetime в числовой формат для matplotlib
+        dates = mdates.date2num(data.index)
+
+        for i, (idx, row) in enumerate(data.iterrows()):
+            date = dates[i]
+            open_price = row['open']
+            high_price = row['high']
+            low_price = row['low']
+            close_price = row['close']
+
+            # Определяем цвет свечи
+            color = colorup if close_price >= open_price else colordown
+
+            # Рисуем фитиль (high-low линия)
+            ax.plot([date, date], [low_price, high_price],
+                   color=color, linewidth=1, solid_capstyle='round', zorder=1)
+
+            # Рисуем тело свечи
+            height = abs(close_price - open_price)
+            bottom = min(open_price, close_price)
+
+            if height == 0:  # Доджи - цена открытия = цене закрытия
+                height = (high_price - low_price) * 0.01  # Тонкая линия
+
+            rect = Rectangle((date - width/2, bottom), width, height,
+                           facecolor=color, edgecolor=color,
+                           linewidth=0.5, zorder=2)
+            ax.add_patch(rect)
+
     def _format_params_text(self, params, fixed_params):
         """Форматирование параметров для отображения на графике"""
         lines = []
@@ -521,12 +563,13 @@ class TradeVisualizer:
         ax_equity = fig.add_subplot(gs[1, :3])
         ax_params = fig.add_subplot(gs[:2, 3])
         
-        # График цены
-        ax_price.plot(data.index, data['close'], label='Price', linewidth=1, 
-                     color='black', alpha=0.7, zorder=1)
-        ax_price.plot(data.index, data['ma'], 
-                     label=f"{params.get('MA Type', 'MA')} {int(float(params.get('MA Length', 50)))}", 
-                     linewidth=1.5, color='blue', alpha=0.8, zorder=2)
+        # График цены - японские свечи
+        self._plot_candlesticks(ax_price, data)
+
+        # Скользящая средняя (фиолетовый ненасыщенный цвет)
+        ax_price.plot(data.index, data['ma'],
+                     label=f"{params.get('MA Type', 'MA')} {int(float(params.get('MA Length', 50)))}",
+                     linewidth=1.5, color='mediumpurple', alpha=0.8, zorder=3)
         ax_price.plot(data.index, data['trail_long'], 
                      label=f"Trail Long ({params.get('Tr L Type', 'T3')} {int(float(params.get('Tr L Len', 100)))})",
                      linewidth=1, color='green', alpha=0.6, linestyle='--', zorder=2)
@@ -538,13 +581,16 @@ class TradeVisualizer:
         for trade in trades:
             if trade['type'] == 'long':
                 # Entry
-                ax_price.scatter(trade['entry_time'], trade['entry_price'], 
-                               color='green', marker='^', s=150, zorder=5, 
+                ax_price.scatter(trade['entry_time'], trade['entry_price'],
+                               color='green', marker='^', s=150, zorder=5,
                                edgecolors='darkgreen', linewidths=1.5)
                 # Exit
-                ax_price.scatter(trade['exit_time'], trade['exit_price'], 
+                ax_price.scatter(trade['exit_time'], trade['exit_price'],
                                color='red', marker='v', s=150, zorder=5,
                                edgecolors='darkred', linewidths=1.5)
+                # Exit marker (orange cross)
+                ax_price.scatter(trade['exit_time'], trade['exit_price'],
+                               color='orange', marker='x', s=80, zorder=6, linewidths=2)
                 # Initial stop
                 ax_price.hlines(trade['initial_stop'], trade['entry_time'], trade['exit_time'],
                               colors='red', linestyles='dotted', alpha=0.5, linewidth=1, zorder=3)
@@ -552,17 +598,20 @@ class TradeVisualizer:
                 if len(trade['trail_history']) > 1:
                     trail_times = [t[0] for t in trade['trail_history']]
                     trail_prices = [t[1] for t in trade['trail_history']]
-                    ax_price.plot(trail_times, trail_prices, color='orange', 
+                    ax_price.plot(trail_times, trail_prices, color='orange',
                                 linewidth=2, alpha=0.8, zorder=4)
             else:  # short
                 # Entry
-                ax_price.scatter(trade['entry_time'], trade['entry_price'], 
+                ax_price.scatter(trade['entry_time'], trade['entry_price'],
                                color='red', marker='v', s=150, zorder=5,
                                edgecolors='darkred', linewidths=1.5)
                 # Exit
-                ax_price.scatter(trade['exit_time'], trade['exit_price'], 
+                ax_price.scatter(trade['exit_time'], trade['exit_price'],
                                color='green', marker='^', s=150, zorder=5,
                                edgecolors='darkgreen', linewidths=1.5)
+                # Exit marker (orange cross)
+                ax_price.scatter(trade['exit_time'], trade['exit_price'],
+                               color='orange', marker='x', s=80, zorder=6, linewidths=2)
                 # Initial stop
                 ax_price.hlines(trade['initial_stop'], trade['entry_time'], trade['exit_time'],
                               colors='green', linestyles='dotted', alpha=0.5, linewidth=1, zorder=3)
@@ -570,7 +619,7 @@ class TradeVisualizer:
                 if len(trade['trail_history']) > 1:
                     trail_times = [t[0] for t in trade['trail_history']]
                     trail_prices = [t[1] for t in trade['trail_history']]
-                    ax_price.plot(trail_times, trail_prices, color='cyan', 
+                    ax_price.plot(trail_times, trail_prices, color='cyan',
                                 linewidth=2, alpha=0.8, zorder=4)
         
         # Заголовок
