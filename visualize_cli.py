@@ -299,7 +299,7 @@ class TradeVisualizer:
             trail_ma_short_length=int(float(self._get_parameter_value(params, 'Tr S Len', 100))),
             trail_ma_short_offset=float(self._get_parameter_value(params, 'Tr S Off', 0.0)),
             risk_per_trade_pct=2.0,
-            contract_size=1.0,
+            contract_size=0.01,
             commission_rate=0.0005,
         )
 
