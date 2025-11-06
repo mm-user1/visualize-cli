@@ -251,14 +251,8 @@ class TradeVisualizer:
         }
     
     def _run_backtest(self, params, date_range=None):
-        """
-        Запускает бэктест с использованием движка проекта
-        Если движок недоступен, использует упрощенную симуляцию
-        """
-        if self.backtest_engine and hasattr(self.backtest_engine, 'run_strategy'):
-            return self._run_project_backtest(params, date_range)
-        else:
-            return self._run_simple_backtest(params, date_range)
+        """Запускает бэктест с использованием движка проекта"""
+        return self._run_project_backtest(params, date_range)
     
     def _run_project_backtest(self, params, date_range):
         """Запуск бэктеста через движок проекта"""
@@ -346,148 +340,7 @@ class TradeVisualizer:
                              (1 + float(self._get_parameter_value(params, 'Tr S Off', 0.0)) / 100)
 
         return trades, data, result.net_profit_pct, result.max_drawdown_pct
-    
-    def _run_simple_backtest(self, params, date_range):
-        """Упрощенная симуляция трейдов"""
-        data = self.market_data.copy()
 
-        # Применяем фильтр по датам
-        if date_range:
-            start, end = date_range
-            data = data[start:end]
-            if len(data) == 0:
-                print(f"  ⚠ Warning: No data in date range {start} to {end}")
-                print(f"    Available data range: {self.market_data.index.min()} to {self.market_data.index.max()}")
-                return [], data, 0.0, 0.0
-        
-        # Извлекаем параметры
-        ma_type = self._get_parameter_value(params, 'MA Type', 'EMA')
-        ma_length = int(float(self._get_parameter_value(params, 'MA Length', 50)))
-        close_long = int(float(self._get_parameter_value(params, 'CC L', 3)))
-        close_short = int(float(self._get_parameter_value(params, 'CC S', 3)))
-
-        # Расчет основного MA
-        data['ma'] = self._calculate_ma(data, ma_type, ma_length)
-
-        # Трейлинг стопы
-        tr_l_type = self._get_parameter_value(params, 'Tr L Type', 'T3')
-        tr_l_len = int(float(self._get_parameter_value(params, 'Tr L Len', 100)))
-        tr_l_off = float(self._get_parameter_value(params, 'Tr L Off', 0.0))
-
-        tr_s_type = self._get_parameter_value(params, 'Tr S Type', 'T3')
-        tr_s_len = int(float(self._get_parameter_value(params, 'Tr S Len', 100)))
-        tr_s_off = float(self._get_parameter_value(params, 'Tr S Off', 0.0))
-        
-        data['trail_long'] = self._calculate_ma(data, tr_l_type, tr_l_len) * (1 + tr_l_off / 100)
-        data['trail_short'] = self._calculate_ma(data, tr_s_type, tr_s_len) * (1 + tr_s_off / 100)
-        
-        # Симуляция трейдов
-        trades = []
-        position = None
-        closes_above = 0
-        closes_below = 0
-        
-        min_bars = max(ma_length, tr_l_len, tr_s_len) + 10
-        
-        for i in range(min_bars, len(data)):
-            price = data['close'].iloc[i]
-            ma = data['ma'].iloc[i]
-            timestamp = data.index[i]
-            
-            # Подсчет закрытий
-            if price > ma:
-                closes_above += 1
-                closes_below = 0
-            else:
-                closes_below += 1
-                closes_above = 0
-            
-            # Вход в позицию
-            if position is None:
-                if closes_above >= close_long:
-                    # Long entry
-                    stop = data['trail_long'].iloc[i]
-                    position = {
-                        'type': 'long',
-                        'entry_time': timestamp,
-                        'entry_price': price,
-                        'entry_index': i,
-                        'stop_price': stop,
-                        'initial_stop': stop,
-                        'trail_history': [(timestamp, stop)]
-                    }
-                elif closes_below >= close_short:
-                    # Short entry
-                    stop = data['trail_short'].iloc[i]
-                    position = {
-                        'type': 'short',
-                        'entry_time': timestamp,
-                        'entry_price': price,
-                        'entry_index': i,
-                        'stop_price': stop,
-                        'initial_stop': stop,
-                        'trail_history': [(timestamp, stop)]
-                    }
-            
-            # Управление открытой позицией
-            elif position:
-                if position['type'] == 'long':
-                    # Обновление трейлинг стопа
-                    new_stop = data['trail_long'].iloc[i]
-                    if new_stop > position['stop_price']:
-                        position['stop_price'] = new_stop
-                        position['trail_history'].append((timestamp, new_stop))
-                    
-                    # Проверка выхода
-                    if price <= position['stop_price']:
-                        position['exit_time'] = timestamp
-                        position['exit_price'] = price  # Реальная цена закрытия свечи
-                        position['exit_index'] = i
-                        position['exit_reason'] = 'stop'
-                        trades.append(position)
-                        position = None
-                        
-                else:  # short
-                    # Обновление трейлинг стопа
-                    new_stop = data['trail_short'].iloc[i]
-                    if new_stop < position['stop_price']:
-                        position['stop_price'] = new_stop
-                        position['trail_history'].append((timestamp, new_stop))
-                    
-                    # Проверка выхода
-                    if price >= position['stop_price']:
-                        position['exit_time'] = timestamp
-                        position['exit_price'] = price  # Реальная цена закрытия свечи
-                        position['exit_index'] = i
-                        position['exit_reason'] = 'stop'
-                        trades.append(position)
-                        position = None
-        
-        # Закрываем открытую позицию
-        if position:
-            position['exit_time'] = data.index[-1]
-            position['exit_price'] = data['close'].iloc[-1]
-            position['exit_index'] = len(data) - 1
-            position['exit_reason'] = 'end'
-            trades.append(position)
-
-        # Расчет Net Profit для упрощенной симуляции
-        if len(trades) > 0:
-            total_pnl = 0
-            for t in trades:
-                if t['type'] == 'long':
-                    pnl = (t['exit_price'] - t['entry_price']) / t['entry_price']
-                else:  # short
-                    pnl = (t['entry_price'] - t['exit_price']) / t['entry_price']
-                total_pnl += pnl
-            net_profit_pct = total_pnl * 100
-            max_dd_pct = 0.0  # Упрощенная версия не считает DD
-        else:
-            net_profit_pct = 0.0
-            max_dd_pct = 0.0
-
-        return trades, data, net_profit_pct, max_dd_pct
-    
     def _calculate_ma(self, data, ma_type, length):
         """Расчет скользящей средней"""
         ma_type = ma_type.upper()
@@ -847,7 +700,10 @@ Examples:
     if backtest_engine:
         print("✓ Loaded project backtest engine")
     else:
-        print("⚠ Project backtest engine not found, using simplified simulation")
+        print("✗ Error: backtest_engine.py not found")
+        print("  The visualization tool requires backtest_engine.py to run.")
+        print("  Please ensure backtest_engine.py is in the project directory.")
+        sys.exit(1)
     
     # Создаем визуализатор
     try:

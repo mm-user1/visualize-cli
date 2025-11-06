@@ -51,14 +51,13 @@ The `backtesting` library is only used for its drawdown calculation utility func
 
 The codebase consists of two main Python modules:
 
-1. **visualize_cli.py** (652 lines) - Main entry point and visualization engine
+1. **visualize_cli.py** (~730 lines) - Main entry point and visualization engine
    - CLI argument parsing
    - CSV data loading (market data + optimization results)
    - Chart generation (matplotlib-based multi-panel layouts)
    - Dynamic discovery and integration with `backtest_engine.py`
-   - Built-in fallback simulation if project engine not found
 
-2. **backtest_engine.py** (661 lines) - Optional strategy backtesting engine
+2. **backtest_engine.py** (661 lines) - Required strategy backtesting engine
    - Comprehensive dataclass models (`StrategyParams`, `TradeRecord`, `StrategyResult`)
    - 11 moving average implementations (EMA, SMA, WMA, HMA, VWMA, ALMA, DEMA, KAMA, TMA, T3, VWAP)
    - Full strategy backtesting with position management, stop-losses, and trailing stops
@@ -66,14 +65,14 @@ The codebase consists of two main Python modules:
 
 ### Dynamic Module Discovery
 
-The `BacktestEngineImporter` class (visualize_cli.py:21-63) automatically discovers `backtest_engine.py`:
+The `BacktestEngineImporter` class (visualize_cli.py:24-76) automatically discovers `backtest_engine.py`:
 
 - Searches up to 5 directory levels from script location
 - Checks common project structures: root, `src/`, `engine/`
 - Uses Python's `importlib.util` for dynamic importing
-- **Gracefully degrades** to built-in simulation if not found
+- **Exits with error** if `backtest_engine.py` is not found
 
-This design allows the tool to function completely standalone while automatically leveraging a full project engine when available.
+This design allows the tool to automatically locate the required backtest engine in various project structures.
 
 ### Data Flow
 
@@ -86,7 +85,7 @@ Input CSVs → Data Loading → Parameter Parsing → Backtesting → Indicator 
 2. Optimization results CSV parsed (fixed parameters + combinations table)
 3. For each top-N combination:
    - Extract strategy parameters
-   - Run backtest (via project engine or fallback)
+   - Run backtest via project engine
    - Calculate all indicators (MAs, ATR)
    - Generate 3-panel chart (price + equity + parameters)
    - Save as PNG (~350KB, 20×12", 150 DPI)
@@ -168,20 +167,16 @@ To add a new indicator type:
 
 ### Backtesting Integration Pattern
 
-The tool uses a **graceful degradation pattern**:
+The tool requires `backtest_engine.py` to function:
 
 ```python
-# visualize_cli.py:226-280
-def _run_backtest(self, ...):
-    if self.be:
-        # Use full project engine
-        return self._run_project_backtest(...)
-    else:
-        # Use simplified built-in simulation
-        return self._run_simple_backtest(...)
+# visualize_cli.py:253-255
+def _run_backtest(self, params, date_range=None):
+    """Запускает бэктест с использованием движка проекта"""
+    return self._run_project_backtest(params, date_range)
 ```
 
-This allows the tool to work in any environment while providing full accuracy when integrated with a project.
+If `backtest_engine.py` is not found during startup, the tool will exit with a clear error message indicating that the file is required.
 
 ### Date Filtering
 
