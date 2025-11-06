@@ -298,10 +298,11 @@ class TradeVisualizer:
             trail_ma_short_type=self._get_parameter_value(params, 'Tr S Type', 'T3'),
             trail_ma_short_length=int(float(self._get_parameter_value(params, 'Tr S Len', 100))),
             trail_ma_short_offset=float(self._get_parameter_value(params, 'Tr S Off', 0.0)),
-            risk_per_trade_pct=1.0,
+            risk_per_trade_pct=2.0,
             contract_size=1.0,
             commission_rate=0.0005,
         )
+
 
         # Запуск стратегии
         result = self.backtest_engine.run_strategy(data_normalized, strategy_params)
@@ -475,9 +476,14 @@ class TradeVisualizer:
         # Запуск бэктеста
         trades, data, net_profit_pct, max_dd_pct = self._run_backtest(params, date_range)
 
-        # Вывод информации о сделках
+        # Вывод информации о сделках и сравнение с CSV
         expected_trades = int(params.get('Trades', 0))
-        print(f"  Generated {len(trades)} trades (CSV shows: {expected_trades})")
+        expected_net_profit = float(str(params.get('Net Profit%', '0%')).replace('%', ''))
+        expected_max_dd = float(str(params.get('Max DD%', '0%')).replace('%', ''))
+
+        print(f"  Trades: {len(trades)} (CSV: {expected_trades})")
+        print(f"  Net Profit: {net_profit_pct:.2f}% (CSV: {expected_net_profit:.2f}%)")
+        print(f"  Max DD: {max_dd_pct:.2f}% (CSV: {expected_max_dd:.2f}%)")
 
         # Проверка на пустые данные
         if len(data) == 0:
