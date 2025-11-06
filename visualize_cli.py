@@ -762,7 +762,10 @@ Examples:
     
     parser.add_argument('--output', type=str, default='./charts',
                        help='Output directory for charts (default: ./charts)')
-    
+
+    parser.add_argument('--simple', action='store_true',
+                       help='Use simplified backtest simulation instead of backtest_engine.py')
+
     args = parser.parse_args()
     
     # Определяем пути
@@ -778,15 +781,19 @@ Examples:
     if args.dates and date_range:
         print(f"Date range: {date_range[0]} to {date_range[1]}")
     
-    # Пытаемся загрузить движок проекта
-    script_dir = Path(__file__).parent
-    importer = BacktestEngineImporter(script_dir)
-    backtest_engine = importer.load_backtest_engine()
-    
-    if backtest_engine:
-        print("✓ Loaded project backtest engine")
+    # Пытаемся загрузить движок проекта (если не указан флаг --simple)
+    if args.simple:
+        backtest_engine = None
+        print("⚠ Using simplified simulation (--simple flag)")
     else:
-        print("⚠ Project backtest engine not found, using simplified simulation")
+        script_dir = Path(__file__).parent
+        importer = BacktestEngineImporter(script_dir)
+        backtest_engine = importer.load_backtest_engine()
+
+        if backtest_engine:
+            print("✓ Loaded project backtest engine")
+        else:
+            print("⚠ Project backtest engine not found, using simplified simulation")
     
     # Создаем визуализатор
     try:
