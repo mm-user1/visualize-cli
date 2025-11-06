@@ -280,7 +280,7 @@ class TradeVisualizer:
             data = data[start:end]
             if len(data) == 0:
                 print(f"  ⚠ Warning: No data in date range {start} to {end}")
-                return [], data
+                return [], data, 0.0, 0.0
 
         # Расчет MA и trail для визуализации
         data['ma'] = self._calculate_ma(data, params.get('MA Type', 'EMA'),
@@ -292,7 +292,7 @@ class TradeVisualizer:
                                                  int(float(params.get('Tr S Len', 100)))) * \
                              (1 + float(params.get('Tr S Off', 0.0)) / 100)
 
-        return trades, data
+        return trades, data, result.net_profit_pct, result.max_drawdown_pct
     
     def _run_simple_backtest(self, params, date_range):
         """Упрощенная симуляция трейдов"""
@@ -305,7 +305,7 @@ class TradeVisualizer:
             if len(data) == 0:
                 print(f"  ⚠ Warning: No data in date range {start} to {end}")
                 print(f"    Available data range: {self.market_data.index.min()} to {self.market_data.index.max()}")
-                return [], data
+                return [], data, 0.0, 0.0
         
         # Извлекаем параметры
         ma_type = params.get('MA Type', 'EMA')
@@ -417,8 +417,23 @@ class TradeVisualizer:
             position['exit_index'] = len(data) - 1
             position['exit_reason'] = 'end'
             trades.append(position)
-        
-        return trades, data
+
+        # Расчет Net Profit для упрощенной симуляции
+        if len(trades) > 0:
+            total_pnl = 0
+            for t in trades:
+                if t['type'] == 'long':
+                    pnl = (t['exit_price'] - t['entry_price']) / t['entry_price']
+                else:  # short
+                    pnl = (t['entry_price'] - t['exit_price']) / t['entry_price']
+                total_pnl += pnl
+            net_profit_pct = total_pnl * 100
+            max_dd_pct = 0.0  # Упрощенная версия не считает DD
+        else:
+            net_profit_pct = 0.0
+            max_dd_pct = 0.0
+
+        return trades, data, net_profit_pct, max_dd_pct
     
     def _calculate_ma(self, data, ma_type, length):
         """Расчет скользящей средней"""
@@ -549,9 +564,9 @@ class TradeVisualizer:
             raise ValueError(f"Combination index {combo_index} out of range (max: {len(combinations)-1})")
         
         params = combinations.iloc[combo_index].to_dict()
-        
+
         # Запуск бэктеста
-        trades, data = self._run_backtest(params, date_range)
+        trades, data, net_profit_pct, max_dd_pct = self._run_backtest(params, date_range)
 
         # Вывод информации о сделках
         expected_trades = int(params.get('Trades', 0))
@@ -621,21 +636,13 @@ class TradeVisualizer:
                     ax_price.plot(trail_times, trail_prices, color='cyan',
                                 linewidth=2, alpha=0.8, zorder=4)
         
-        # Заголовок
-        net_profit = params.get('Net Profit%', 'N/A')
-        if isinstance(net_profit, str) and '%' in net_profit:
-            net_profit = float(net_profit.replace('%', ''))
-        max_dd = params.get('Max DD%', 'N/A')
-        if isinstance(max_dd, str) and '%' in max_dd:
-            max_dd = float(max_dd.replace('%', ''))
+        # Заголовок - используем результаты бэктеста, а не CSV
         sharpe = params.get('Sharpe', 'N/A')
-        
+
         title = f"Combo #{combo_index + 1} - {params.get('MA Type', 'N/A')} {params.get('MA Length', 'N/A')}"
-        if net_profit != 'N/A':
-            title += f" | Net Profit: {net_profit:.1f}%"
+        title += f" | Net Profit: {net_profit_pct:.2f}%"
         title += f" | Trades: {len(trades)}"
-        if max_dd != 'N/A':
-            title += f" | Max DD: {max_dd:.1f}%"
+        title += f" | Max DD: {max_dd_pct:.2f}%"
         if sharpe != 'N/A':
             title += f" | Sharpe: {sharpe:.2f}"
         
