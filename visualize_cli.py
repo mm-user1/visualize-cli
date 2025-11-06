@@ -231,18 +231,18 @@ class TradeVisualizer:
             end=date_range[1] if date_range else None,
             ma_type=params.get('MA Type', 'EMA'),
             ma_length=int(float(params.get('MA Length', 50))),
-            close_count_long=int(float(params.get('Close Count Long', 3))),
-            close_count_short=int(float(params.get('Close Count Short', 3))),
-            stop_long_atr=float(params.get('Stop Long X', 1.0)),
+            close_count_long=int(float(params.get('CC L', 3))),
+            close_count_short=int(float(params.get('CC S', 3))),
+            stop_long_atr=float(params.get('St L X', 1.0)),
             stop_long_rr=float(fixed.get('stopLongRR', 3)),
-            stop_long_lp=int(float(params.get('Stop Long LP', 2))),
-            stop_short_atr=float(params.get('Stop Short X', 1.0)),
+            stop_long_lp=int(float(params.get('St L LP', 2))),
+            stop_short_atr=float(params.get('St S X', 1.0)),
             stop_short_rr=float(fixed.get('stopShortRR', 3)),
-            stop_short_lp=int(float(params.get('Stop Short LP', 2))),
-            stop_long_max_pct=float(params.get('Stop Long Max %', 0)),
-            stop_short_max_pct=float(params.get('Stop Short Max %', 0)),
-            stop_long_max_days=int(float(params.get('Stop Long Max Days', 0))),
-            stop_short_max_days=int(float(params.get('Stop Short Max Days', 0))),
+            stop_short_lp=int(float(params.get('St S LP', 2))),
+            stop_long_max_pct=float(params.get('St L Max %', 0)),
+            stop_short_max_pct=float(params.get('St S Max %', 0)),
+            stop_long_max_days=int(float(params.get('St L Max D', 0))),
+            stop_short_max_days=int(float(params.get('St S Max D', 0))),
             trail_rr_long=float(fixed.get('trailRRLong', 1)),
             trail_rr_short=float(fixed.get('trailRRShort', 1)),
             trail_ma_long_type=params.get('Tr L Type', 'T3'),
@@ -310,8 +310,8 @@ class TradeVisualizer:
         # Извлекаем параметры
         ma_type = params.get('MA Type', 'EMA')
         ma_length = int(float(params.get('MA Length', 50)))
-        close_long = int(float(params.get('Close Count Long', 3)))
-        close_short = int(float(params.get('Close Count Short', 3)))
+        close_long = int(float(params.get('CC L', 3)))
+        close_short = int(float(params.get('CC S', 3)))
         
         # Расчет основного MA
         data['ma'] = self._calculate_ma(data, ma_type, ma_length)
@@ -537,11 +537,11 @@ class TradeVisualizer:
         # Ключевые параметры комбинации
         key_params = [
             'MA Type', 'MA Length',
-            'Close Count Long', 'Close Count Short',
-            'Stop Long X', 'Stop Long LP',
-            'Stop Short X', 'Stop Short LP',
-            'Stop Long Max %', 'Stop Short Max %',
-            'Stop Long Max Days', 'Stop Short Max Days',
+            'CC L', 'CC S',
+            'St L X', 'St L LP',
+            'St S X', 'St S LP',
+            'St L Max %', 'St S Max %',
+            'St L Max D', 'St S Max D',
             'Tr L Type', 'Tr L Len', 'Tr L Off',
             'Tr S Type', 'Tr S Len', 'Tr S Off'
         ]
