@@ -78,7 +78,33 @@ class BacktestEngineImporter:
 
 class TradeVisualizer:
     """Визуализатор трейдов с использованием проектного движка"""
-    
+
+    # Маппинг имен параметров: столбец -> Fixed Parameters
+    PARAMETER_MAPPING = {
+        "MA Type": "maType",
+        "MA Length": "maLength",
+        "CC L": "closeCountLong",
+        "CC S": "closeCountShort",
+        "St L X": "stopLongX",
+        "Stop Long RR": "stopLongRR",
+        "St L LP": "stopLongLP",
+        "St S X": "stopShortX",
+        "Stop Short RR": "stopShortRR",
+        "St S LP": "stopShortLP",
+        "St L Max %": "stopLongMaxPct",
+        "St S Max %": "stopShortMaxPct",
+        "St L Max D": "stopLongMaxDays",
+        "St S Max D": "stopShortMaxDays",
+        "Trail RR Long": "trailRRLong",
+        "Trail RR Short": "trailRRShort",
+        "Tr L Type": "trailLongType",
+        "Tr L Len": "trailLongLength",
+        "Tr L Off": "trailLongOffset",
+        "Tr S Type": "trailShortType",
+        "Tr S Len": "trailShortLength",
+        "Tr S Off": "trailShortOffset",
+    }
+
     def __init__(self, csv_in_path, csv_out_path, backtest_engine=None):
         self.csv_in_path = Path(csv_in_path)
         self.csv_out_path = Path(csv_out_path)
@@ -90,7 +116,36 @@ class TradeVisualizer:
         
         print(f"✓ Market data loaded: {len(self.market_data)} bars")
         print(f"✓ Optimization results loaded: {len(self.optimization_results['combinations'])} combinations")
-    
+
+    def _get_parameter_value(self, params, column_name, default=None):
+        """
+        Получает значение параметра из params или fixed_params.
+
+        Сначала ищет в params (столбцы CSV), если не найдено - ищет в fixed_params
+        под альтернативным именем из PARAMETER_MAPPING.
+
+        Args:
+            params: dict с параметрами из строки CSV
+            column_name: имя столбца (короткое имя)
+            default: значение по умолчанию если параметр не найден
+
+        Returns:
+            Значение параметра или default
+        """
+        # Сначала пробуем получить из столбцов
+        if column_name in params and pd.notna(params[column_name]):
+            return params[column_name]
+
+        # Если нет в столбцах, ищем в Fixed Parameters под альтернативным именем
+        fixed_name = self.PARAMETER_MAPPING.get(column_name)
+        if fixed_name:
+            fixed_params = self.optimization_results.get('fixed_params', {})
+            if fixed_name in fixed_params:
+                return fixed_params[fixed_name]
+
+        # Возвращаем default
+        return default
+
     def _load_market_data(self):
         """Загрузка рыночных данных"""
         if not self.csv_in_path.exists():
@@ -222,35 +277,33 @@ class TradeVisualizer:
         data_normalized.index = data.index
 
         # Создание объекта StrategyParams
-        fixed = self.optimization_results['fixed_params']
-
         strategy_params = self.backtest_engine.StrategyParams(
             use_backtester=True,
             use_date_filter=date_range is not None,
             start=date_range[0] if date_range else None,
             end=date_range[1] if date_range else None,
-            ma_type=params.get('MA Type', 'EMA'),
-            ma_length=int(float(params.get('MA Length', 50))),
-            close_count_long=int(float(params.get('CC L', 3))),
-            close_count_short=int(float(params.get('CC S', 3))),
-            stop_long_atr=float(params.get('St L X', 1.0)),
-            stop_long_rr=float(fixed.get('stopLongRR', 3)),
-            stop_long_lp=int(float(params.get('St L LP', 2))),
-            stop_short_atr=float(params.get('St S X', 1.0)),
-            stop_short_rr=float(fixed.get('stopShortRR', 3)),
-            stop_short_lp=int(float(params.get('St S LP', 2))),
-            stop_long_max_pct=float(params.get('St L Max %', 0)),
-            stop_short_max_pct=float(params.get('St S Max %', 0)),
-            stop_long_max_days=int(float(params.get('St L Max D', 0))),
-            stop_short_max_days=int(float(params.get('St S Max D', 0))),
-            trail_rr_long=float(fixed.get('trailRRLong', 1)),
-            trail_rr_short=float(fixed.get('trailRRShort', 1)),
-            trail_ma_long_type=params.get('Tr L Type', 'T3'),
-            trail_ma_long_length=int(float(params.get('Tr L Len', 100))),
-            trail_ma_long_offset=float(params.get('Tr L Off', 0.0)),
-            trail_ma_short_type=params.get('Tr S Type', 'T3'),
-            trail_ma_short_length=int(float(params.get('Tr S Len', 100))),
-            trail_ma_short_offset=float(params.get('Tr S Off', 0.0)),
+            ma_type=self._get_parameter_value(params, 'MA Type', 'EMA'),
+            ma_length=int(float(self._get_parameter_value(params, 'MA Length', 50))),
+            close_count_long=int(float(self._get_parameter_value(params, 'CC L', 3))),
+            close_count_short=int(float(self._get_parameter_value(params, 'CC S', 3))),
+            stop_long_atr=float(self._get_parameter_value(params, 'St L X', 1.0)),
+            stop_long_rr=float(self._get_parameter_value(params, 'Stop Long RR', 3)),
+            stop_long_lp=int(float(self._get_parameter_value(params, 'St L LP', 2))),
+            stop_short_atr=float(self._get_parameter_value(params, 'St S X', 1.0)),
+            stop_short_rr=float(self._get_parameter_value(params, 'Stop Short RR', 3)),
+            stop_short_lp=int(float(self._get_parameter_value(params, 'St S LP', 2))),
+            stop_long_max_pct=float(self._get_parameter_value(params, 'St L Max %', 0)),
+            stop_short_max_pct=float(self._get_parameter_value(params, 'St S Max %', 0)),
+            stop_long_max_days=int(float(self._get_parameter_value(params, 'St L Max D', 0))),
+            stop_short_max_days=int(float(self._get_parameter_value(params, 'St S Max D', 0))),
+            trail_rr_long=float(self._get_parameter_value(params, 'Trail RR Long', 1)),
+            trail_rr_short=float(self._get_parameter_value(params, 'Trail RR Short', 1)),
+            trail_ma_long_type=self._get_parameter_value(params, 'Tr L Type', 'T3'),
+            trail_ma_long_length=int(float(self._get_parameter_value(params, 'Tr L Len', 100))),
+            trail_ma_long_offset=float(self._get_parameter_value(params, 'Tr L Off', 0.0)),
+            trail_ma_short_type=self._get_parameter_value(params, 'Tr S Type', 'T3'),
+            trail_ma_short_length=int(float(self._get_parameter_value(params, 'Tr S Len', 100))),
+            trail_ma_short_offset=float(self._get_parameter_value(params, 'Tr S Off', 0.0)),
             risk_per_trade_pct=1.0,
             contract_size=1.0,
             commission_rate=0.0005,
@@ -283,14 +336,14 @@ class TradeVisualizer:
                 return [], data, 0.0, 0.0
 
         # Расчет MA и trail для визуализации
-        data['ma'] = self._calculate_ma(data, params.get('MA Type', 'EMA'),
-                                        int(float(params.get('MA Length', 50))))
-        data['trail_long'] = self._calculate_ma(data, params.get('Tr L Type', 'T3'),
-                                                int(float(params.get('Tr L Len', 100)))) * \
-                            (1 + float(params.get('Tr L Off', 0.0)) / 100)
-        data['trail_short'] = self._calculate_ma(data, params.get('Tr S Type', 'T3'),
-                                                 int(float(params.get('Tr S Len', 100)))) * \
-                             (1 + float(params.get('Tr S Off', 0.0)) / 100)
+        data['ma'] = self._calculate_ma(data, self._get_parameter_value(params, 'MA Type', 'EMA'),
+                                        int(float(self._get_parameter_value(params, 'MA Length', 50))))
+        data['trail_long'] = self._calculate_ma(data, self._get_parameter_value(params, 'Tr L Type', 'T3'),
+                                                int(float(self._get_parameter_value(params, 'Tr L Len', 100)))) * \
+                            (1 + float(self._get_parameter_value(params, 'Tr L Off', 0.0)) / 100)
+        data['trail_short'] = self._calculate_ma(data, self._get_parameter_value(params, 'Tr S Type', 'T3'),
+                                                 int(float(self._get_parameter_value(params, 'Tr S Len', 100)))) * \
+                             (1 + float(self._get_parameter_value(params, 'Tr S Off', 0.0)) / 100)
 
         return trades, data, result.net_profit_pct, result.max_drawdown_pct
     
@@ -308,22 +361,22 @@ class TradeVisualizer:
                 return [], data, 0.0, 0.0
         
         # Извлекаем параметры
-        ma_type = params.get('MA Type', 'EMA')
-        ma_length = int(float(params.get('MA Length', 50)))
-        close_long = int(float(params.get('CC L', 3)))
-        close_short = int(float(params.get('CC S', 3)))
-        
+        ma_type = self._get_parameter_value(params, 'MA Type', 'EMA')
+        ma_length = int(float(self._get_parameter_value(params, 'MA Length', 50)))
+        close_long = int(float(self._get_parameter_value(params, 'CC L', 3)))
+        close_short = int(float(self._get_parameter_value(params, 'CC S', 3)))
+
         # Расчет основного MA
         data['ma'] = self._calculate_ma(data, ma_type, ma_length)
-        
+
         # Трейлинг стопы
-        tr_l_type = params.get('Tr L Type', 'T3')
-        tr_l_len = int(float(params.get('Tr L Len', 100)))
-        tr_l_off = float(params.get('Tr L Off', 0.0))
-        
-        tr_s_type = params.get('Tr S Type', 'T3')
-        tr_s_len = int(float(params.get('Tr S Len', 100)))
-        tr_s_off = float(params.get('Tr S Off', 0.0))
+        tr_l_type = self._get_parameter_value(params, 'Tr L Type', 'T3')
+        tr_l_len = int(float(self._get_parameter_value(params, 'Tr L Len', 100)))
+        tr_l_off = float(self._get_parameter_value(params, 'Tr L Off', 0.0))
+
+        tr_s_type = self._get_parameter_value(params, 'Tr S Type', 'T3')
+        tr_s_len = int(float(self._get_parameter_value(params, 'Tr S Len', 100)))
+        tr_s_off = float(self._get_parameter_value(params, 'Tr S Off', 0.0))
         
         data['trail_long'] = self._calculate_ma(data, tr_l_type, tr_l_len) * (1 + tr_l_off / 100)
         data['trail_short'] = self._calculate_ma(data, tr_s_type, tr_s_len) * (1 + tr_s_off / 100)
@@ -547,8 +600,9 @@ class TradeVisualizer:
         ]
 
         for param in key_params:
-            if param in params:
-                lines.append(f"  {param}: {params[param]}")
+            value = self._get_parameter_value(params, param)
+            if value is not None:
+                lines.append(f"  {param}: {value}")
 
         return '\n'.join(lines)
     
@@ -590,13 +644,13 @@ class TradeVisualizer:
 
         # Скользящая средняя (фиолетовый ненасыщенный цвет)
         ax_price.plot(data.index, data['ma'],
-                     label=f"{params.get('MA Type', 'MA')} {int(float(params.get('MA Length', 50)))}",
+                     label=f"{self._get_parameter_value(params, 'MA Type', 'MA')} {int(float(self._get_parameter_value(params, 'MA Length', 50)))}",
                      linewidth=1.5, color='mediumpurple', alpha=0.8, zorder=3)
-        ax_price.plot(data.index, data['trail_long'], 
-                     label=f"Trail Long ({params.get('Tr L Type', 'T3')} {int(float(params.get('Tr L Len', 100)))})",
+        ax_price.plot(data.index, data['trail_long'],
+                     label=f"Trail Long ({self._get_parameter_value(params, 'Tr L Type', 'T3')} {int(float(self._get_parameter_value(params, 'Tr L Len', 100)))})",
                      linewidth=1, color='green', alpha=0.6, linestyle='--', zorder=2)
-        ax_price.plot(data.index, data['trail_short'], 
-                     label=f"Trail Short ({params.get('Tr S Type', 'T3')} {int(float(params.get('Tr S Len', 100)))})",
+        ax_price.plot(data.index, data['trail_short'],
+                     label=f"Trail Short ({self._get_parameter_value(params, 'Tr S Type', 'T3')} {int(float(self._get_parameter_value(params, 'Tr S Len', 100)))})",
                      linewidth=1, color='red', alpha=0.6, linestyle='--', zorder=2)
         
         # Трейды
@@ -639,7 +693,7 @@ class TradeVisualizer:
         # Заголовок - используем результаты бэктеста, а не CSV
         sharpe = params.get('Sharpe', 'N/A')
 
-        title = f"Combo #{combo_index + 1} - {params.get('MA Type', 'N/A')} {params.get('MA Length', 'N/A')}"
+        title = f"Combo #{combo_index + 1} - {self._get_parameter_value(params, 'MA Type', 'N/A')} {self._get_parameter_value(params, 'MA Length', 'N/A')}"
         title += f" | Net Profit: {net_profit_pct:.2f}%"
         title += f" | Trades: {len(trades)}"
         title += f" | Max DD: {max_dd_pct:.2f}%"
@@ -689,7 +743,7 @@ class TradeVisualizer:
                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
         
         # Сохранение
-        filename = f"combo_{combo_index + 1}_{params.get('MA Type', 'MA')}_{int(float(params.get('MA Length', 50)))}.png"
+        filename = f"combo_{combo_index + 1}_{self._get_parameter_value(params, 'MA Type', 'MA')}_{int(float(self._get_parameter_value(params, 'MA Length', 50)))}.png"
         filepath = output_dir / filename
         plt.savefig(filepath, dpi=150, bbox_inches='tight', facecolor='white')
         plt.close()
