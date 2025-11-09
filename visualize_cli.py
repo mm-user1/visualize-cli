@@ -323,14 +323,43 @@ class TradeVisualizer:
             })
 
         # Расчет MA и trail для визуализации (на ВСЕХ данных для правильного warm-up периода)
-        data['ma'] = self._calculate_ma(data, self._get_parameter_value(params, 'MA Type', 'EMA'),
-                                        int(float(self._get_parameter_value(params, 'MA Length', 50))))
-        data['trail_long'] = self._calculate_ma(data, self._get_parameter_value(params, 'Tr L Type', 'T3'),
-                                                int(float(self._get_parameter_value(params, 'Tr L Len', 100)))) * \
-                            (1 + float(self._get_parameter_value(params, 'Tr L Off', 0.0)) / 100)
-        data['trail_short'] = self._calculate_ma(data, self._get_parameter_value(params, 'Tr S Type', 'T3'),
-                                                 int(float(self._get_parameter_value(params, 'Tr S Len', 100)))) * \
-                             (1 + float(self._get_parameter_value(params, 'Tr S Off', 0.0)) / 100)
+        # Используем get_ma() из backtest_engine для корректных расчетов всех типов MA
+        ma_type = self._get_parameter_value(params, 'MA Type', 'EMA')
+        ma_length = int(float(self._get_parameter_value(params, 'MA Length', 50)))
+        data['ma'] = self.backtest_engine.get_ma(
+            data['close'],
+            ma_type,
+            ma_length,
+            volume=data['volume'] if 'volume' in data.columns else None,
+            high=data['high'],
+            low=data['low']
+        )
+
+        trail_long_type = self._get_parameter_value(params, 'Tr L Type', 'T3')
+        trail_long_len = int(float(self._get_parameter_value(params, 'Tr L Len', 100)))
+        trail_long_off = float(self._get_parameter_value(params, 'Tr L Off', 0.0))
+        trail_long_ma = self.backtest_engine.get_ma(
+            data['close'],
+            trail_long_type,
+            trail_long_len,
+            volume=data['volume'] if 'volume' in data.columns else None,
+            high=data['high'],
+            low=data['low']
+        )
+        data['trail_long'] = trail_long_ma * (1 + trail_long_off / 100)
+
+        trail_short_type = self._get_parameter_value(params, 'Tr S Type', 'T3')
+        trail_short_len = int(float(self._get_parameter_value(params, 'Tr S Len', 100)))
+        trail_short_off = float(self._get_parameter_value(params, 'Tr S Off', 0.0))
+        trail_short_ma = self.backtest_engine.get_ma(
+            data['close'],
+            trail_short_type,
+            trail_short_len,
+            volume=data['volume'] if 'volume' in data.columns else None,
+            high=data['high'],
+            low=data['low']
+        )
+        data['trail_short'] = trail_short_ma * (1 + trail_short_off / 100)
 
         # Применяем фильтр по датам ПОСЛЕ расчета индикаторов (для корректного отображения)
         if date_range:
@@ -342,48 +371,6 @@ class TradeVisualizer:
 
         return trades, data, result.net_profit_pct, result.max_drawdown_pct
 
-    def _calculate_ma(self, data, ma_type, length):
-        """Расчет скользящей средней"""
-        ma_type = ma_type.upper()
-        
-        if ma_type == 'SMA':
-            return data['close'].rolling(window=length).mean()
-        elif ma_type == 'EMA':
-            return data['close'].ewm(span=length, adjust=False).mean()
-        elif ma_type == 'WMA':
-            weights = np.arange(1, length + 1)
-            return data['close'].rolling(window=length).apply(
-                lambda x: np.dot(x, weights) / weights.sum(), raw=True
-            )
-        elif ma_type == 'DEMA':
-            ema1 = data['close'].ewm(span=length, adjust=False).mean()
-            ema2 = ema1.ewm(span=length, adjust=False).mean()
-            return 2 * ema1 - ema2
-        elif ma_type == 'T3':
-            alpha = 0.7
-            ema1 = data['close'].ewm(span=length, adjust=False).mean()
-            ema2 = ema1.ewm(span=length, adjust=False).mean()
-            ema3 = ema2.ewm(span=length, adjust=False).mean()
-            ema4 = ema3.ewm(span=length, adjust=False).mean()
-            ema5 = ema4.ewm(span=length, adjust=False).mean()
-            ema6 = ema5.ewm(span=length, adjust=False).mean()
-            c1 = -alpha**3
-            c2 = 3*alpha**2 + 3*alpha**3
-            c3 = -6*alpha**2 - 3*alpha - 3*alpha**3
-            c4 = 1 + 3*alpha + alpha**3 + 3*alpha**2
-            return c1*ema6 + c2*ema5 + c3*ema4 + c4*ema3
-        elif ma_type == 'VWMA':
-            if 'volume' in data.columns:
-                return (data['close'] * data['volume']).rolling(window=length).sum() / \
-                       data['volume'].rolling(window=length).sum()
-            else:
-                return data['close'].rolling(window=length).mean()
-        elif ma_type in ['ALMA', 'KAMA', 'TMA']:
-            # Упрощенные версии
-            return data['close'].ewm(span=length, adjust=False).mean()
-        else:
-            return data['close'].rolling(window=length).mean()
-    
     def _plot_candlesticks(self, ax, data, width=None, colorup='#26a69a', colordown='#ef5350'):
         """
         Рисует японские свечи на графике
