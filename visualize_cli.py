@@ -322,15 +322,7 @@ class TradeVisualizer:
                 'trail_history': []  # Будет пустым, так как engine не возвращает историю
             })
 
-        # Пересчет индикаторов для графика (используем данные с фильтром по датам если нужно)
-        if date_range:
-            start, end = date_range
-            data = data[start:end]
-            if len(data) == 0:
-                print(f"  ⚠ Warning: No data in date range {start} to {end}")
-                return [], data, 0.0, 0.0
-
-        # Расчет MA и trail для визуализации
+        # Расчет MA и trail для визуализации (на ВСЕХ данных для правильного warm-up периода)
         data['ma'] = self._calculate_ma(data, self._get_parameter_value(params, 'MA Type', 'EMA'),
                                         int(float(self._get_parameter_value(params, 'MA Length', 50))))
         data['trail_long'] = self._calculate_ma(data, self._get_parameter_value(params, 'Tr L Type', 'T3'),
@@ -339,6 +331,14 @@ class TradeVisualizer:
         data['trail_short'] = self._calculate_ma(data, self._get_parameter_value(params, 'Tr S Type', 'T3'),
                                                  int(float(self._get_parameter_value(params, 'Tr S Len', 100)))) * \
                              (1 + float(self._get_parameter_value(params, 'Tr S Off', 0.0)) / 100)
+
+        # Применяем фильтр по датам ПОСЛЕ расчета индикаторов (для корректного отображения)
+        if date_range:
+            start, end = date_range
+            data = data[start:end]
+            if len(data) == 0:
+                print(f"  ⚠ Warning: No data in date range {start} to {end}")
+                return [], data, 0.0, 0.0
 
         return trades, data, result.net_profit_pct, result.max_drawdown_pct
 
